@@ -202,7 +202,13 @@ public abstract class FeedApi : WhatsApp.WhatsAppApi
     public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
         _shuttingDown = false;
-        return await DoConnectAsync(cancellationToken);
+        var connected = await DoConnectAsync(cancellationToken);
+        if (!connected && AutoReconnect && !cancellationToken.IsCancellationRequested)
+        {
+            ScheduleReconnect();
+        }
+
+        return connected;
     }
 
     /// <summary>
@@ -243,11 +249,27 @@ public abstract class FeedApi : WhatsApp.WhatsAppApi
                 await Task.Delay(100, cancellationToken);
             }
 
-            return Authenticated;
+            if (Authenticated)
+            {
+                return true;
+            }
+
+            Log(1, "ERROR", "WebSocket authentication timed out or was rejected.");
+            _cancellationTokenSource.Cancel();
+            _webSocket.Dispose();
+            _webSocket = null;
+            Connected = false;
+            Authenticated = false;
+            return false;
         }
         catch (Exception ex)
         {
             Log(1, "ERROR", $"Error connecting to WebSocket: {ex.Message}");
+            _cancellationTokenSource?.Cancel();
+            _webSocket?.Dispose();
+            _webSocket = null;
+            Connected = false;
+            Authenticated = false;
             return false;
         }
     }
