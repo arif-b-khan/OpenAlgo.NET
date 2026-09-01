@@ -522,7 +522,9 @@ public abstract class FeedApi : WhatsApp.WhatsAppApi
                         var sym = sub.TryGetProperty("symbol", out var symElement) ? symElement.GetString() : "?";
                         var exch = sub.TryGetProperty("exchange", out var exchElement) ? exchElement.GetString() : "?";
                         var subStatus = sub.TryGetProperty("status", out var subStatusElement) ? subStatusElement.GetString() : "?";
-                        var mode = sub.TryGetProperty("mode", out var modeElement) ? modeElement.GetInt32() : 0;
+                        var mode = sub.TryGetProperty("mode", out var modeElement)
+                            ? ParseSubscriptionMode(modeElement)
+                            : 0;
                         var modeName = mode switch { 1 => "LTP", 2 => "Quote", 3 => "Depth", _ => "Unknown" };
                         Log(1, "SUB", $"{exch}:{sym} | Mode: {modeName} | Status: {subStatus}");
                     }
@@ -564,6 +566,28 @@ public abstract class FeedApi : WhatsApp.WhatsAppApi
         {
             Log(1, "ERROR", $"Error handling message: {ex.Message}");
         }
+    }
+
+    private static int ParseSubscriptionMode(JsonElement modeElement)
+    {
+        if (modeElement.ValueKind == JsonValueKind.Number
+            && modeElement.TryGetInt32(out var numericMode))
+        {
+            return numericMode;
+        }
+
+        if (modeElement.ValueKind == JsonValueKind.String)
+        {
+            return modeElement.GetString()?.Trim().ToUpperInvariant() switch
+            {
+                "LTP" => 1,
+                "QUOTE" => 2,
+                "DEPTH" => 3,
+                _ => 0
+            };
+        }
+
+        return 0;
     }
 
     private void HandleLtpData(string exchange, string symbol, string symbolKey, JsonElement dataElement)
