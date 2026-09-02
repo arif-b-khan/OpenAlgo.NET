@@ -270,20 +270,22 @@ public abstract class OptionsApi : Account.AccountApi
     #region OptionChain
 
     /// <summary>
-    /// Fetch Option Chain Data with Real-time Quotes for All Strikes (async).
+    /// Fetch option-chain contract structure, optionally including live quotes (async).
     /// </summary>
     /// <param name="underlying">Underlying symbol. Required.</param>
     /// <param name="exchange">Exchange code. Required.</param>
     /// <param name="expiryDate">Expiry date in DDMMMYY format. Required unless underlying includes expiry.</param>
     /// <param name="strikeCount">Number of strikes above and below ATM (1-100). Returns all strikes if not specified.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="withQuotes">Whether OpenAlgo should fetch live CE/PE quotes. Set false for contract discovery.</param>
     /// <returns>Option chain response.</returns>
     public async Task<OptionChainResponse> OptionChainAsync(
         string underlying,
         string exchange,
         string? expiryDate = null,
         int? strikeCount = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool withQuotes = true)
     {
         var payload = CreatePayload();
         payload["underlying"] = underlying;
@@ -299,19 +301,22 @@ public abstract class OptionsApi : Account.AccountApi
             payload["strike_count"] = strikeCount.Value;
         }
 
+        payload["with_quotes"] = withQuotes;
+
         return await MakeRequestAsync<OptionChainResponse>("optionchain", payload, cancellationToken);
     }
 
     /// <summary>
-    /// Fetch Option Chain Data with Real-time Quotes for All Strikes (sync).
+    /// Fetch option-chain contract structure, optionally including live quotes (sync).
     /// </summary>
     public OptionChainResponse OptionChain(
         string underlying,
         string exchange,
         string? expiryDate = null,
-        int? strikeCount = null)
+        int? strikeCount = null,
+        bool withQuotes = true)
     {
-        return OptionChainAsync(underlying, exchange, expiryDate, strikeCount).GetAwaiter().GetResult();
+        return OptionChainAsync(underlying, exchange, expiryDate, strikeCount, withQuotes: withQuotes).GetAwaiter().GetResult();
     }
 
     #endregion
