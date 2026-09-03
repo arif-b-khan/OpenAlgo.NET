@@ -730,13 +730,18 @@ public abstract class FeedApi : WhatsApp.WhatsAppApi
 
     private async Task<bool> UnsubscribeAsync(List<Instrument> instruments, int mode, CancellationToken cancellationToken)
     {
-        if (!Connected || !Authenticated)
-        {
-            return false;
-        }
-
         foreach (var instrument in instruments)
         {
+            // Remove local replay and quote/depth state even when the socket is
+            // already down. Otherwise a stale contract can be replayed by the
+            // next auto-reconnect and remain visible through Get*().
+            RemoveLocalSubscription(instrument, mode);
+
+            if (!Connected || !Authenticated)
+            {
+                continue;
+            }
+
             var unsubscribeMsg = new
             {
                 action = "unsubscribe",
@@ -755,20 +760,6 @@ public abstract class FeedApi : WhatsApp.WhatsAppApi
             {
                 await _webSocket!.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cancellationToken);
 
-                // Drop from the active-subscription store so a reconnect does not replay it.
-                if (_activeSubs.TryGetValue(mode, out var store))
-                {
-                    store.TryRemove((instrument.Exchange, instrument.Symbol), out _);
-                }
-
-                var symbolKey = $"{instrument.Exchange}:{instrument.Symbol}";
-                switch (mode)
-                {
-                    case 1: _ltpData.TryRemove(symbolKey, out _); break;
-                    case 2: _quotesData.TryRemove(symbolKey, out _); break;
-                    case 3: _depthData.TryRemove(symbolKey, out _); break;
-                }
-
                 await Task.Delay(100, cancellationToken);
             }
             catch (Exception ex)
@@ -778,7 +769,23 @@ public abstract class FeedApi : WhatsApp.WhatsAppApi
             }
         }
 
-        return true;
+        return Connected && Authenticated;
+    }
+
+    private void RemoveLocalSubscription(Instrument instrument, int mode)
+    {
+        if (_activeSubs.TryGetValue(mode, out var store))
+        {
+            store.TryRemove((instrument.Exchange, instrument.Symbol), out _);
+        }
+
+        var symbolKey = $"{instrument.Exchange}:{instrument.Symbol}";
+        switch (mode)
+        {
+            case 1: _ltpData.TryRemove(symbolKey, out _); break;
+            case 2: _quotesData.TryRemove(symbolKey, out _); break;
+            case 3: _depthData.TryRemove(symbolKey, out _); break;
+        }
     }
 
     /// <summary>
